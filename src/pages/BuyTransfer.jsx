@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+// src/pages/BuyTransfer.jsx
+import React, { useRef, useState } from 'react'
 import { useConnection, useWallet } from '@solana/wallet-adapter-react'
 import { getMetaplex } from '../solana'
 import { PublicKey } from '@solana/web3.js'
@@ -15,7 +16,10 @@ export default function BuyTransfer() {
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const parsePk = (v, label) => { try { return new PublicKey(v) } catch { throw new Error(`${label} 주소가 올바르지 않아요`) } }
+  const parsePk = (v, label) => {
+    try { return new PublicKey(v) }
+    catch { throw new Error(`${label} The address is not correct`) }
+  }
   const human = (e) => e?.cause?.message || e?.message || String(e)
 
   async function getOwnerByMint(mintStr) {
@@ -28,81 +32,110 @@ export default function BuyTransfer() {
       return acct.value?.data?.parsed?.info?.owner || 'unknown'
     } catch { return 'unknown' }
   }
+
   const refreshOwner = async () => {
-    if (!mint.trim()) { setMsg('Mint 주소를 먼저 입력하세요'); return }
+    if (!mint.trim()) { setMsg('Enter Mint address first'); return }
     const cur = await getOwnerByMint(mint)
     setOwner(cur)
   }
 
   const onTransfer = async () => {
-    if (!wallet.connected) return setMsg('⚠️ 지갑을 먼저 연결하세요')
-    if (!mint.trim())      return setMsg('⚠️ Mint 주소를 입력하세요')
+    if (!wallet.connected) return setMsg('⚠️ Connect your wallet first')
+    if (!mint.trim()) return setMsg('⚠️ Enter Mint address first')
     if (busy) return
-    setBusy(true); setMsg('전송 준비 중...')
+    setBusy(true)
+    setMsg('Preparing to transfer...')
 
     try {
       const mx = getMetaplex(connection, wallet)
       const mintPk = parsePk(mint, 'Mint')
       const toOwner = recipient ? parsePk(recipient, 'Recipient') : wallet.publicKey
 
-      setMsg('🔄 전송 중... Phantom 팝업을 확인하세요')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
+
+      setMsg('🔄 transfering... please check wallet extension\'s pop-up')
       const nft = await mx.nfts().findByMint({ mintAddress: mintPk })
-      const res = await mx.nfts().transfer({ nftOrSft: nft, toOwner })
 
-      // optional confirm
+      let txResult
       try {
-        const sig = res?.response?.signature
-        if (sig) await connection.confirmTransaction({
-          signature: sig,
-          blockhash: res?.response?.blockhash ?? '',
-          lastValidBlockHeight: res?.response?.lastValidBlockHeight ?? 0
-        }, 'confirmed')
-      } catch {}
+        txResult = await mx.nfts().transfer({ nftOrSft: nft, toOwner })
+      } catch (innerErr) {
+        const text = human(innerErr)
+        if (text.includes('already been processed')) {
+          setMsg('✅ Success (already been processed)')
+        } else {
+          throw innerErr
+        }
+      }
 
-      setMsg('✅ 전송 완료')
-      try { setQrUrl(await QRCode.toDataURL(mint)) } catch {}
-      await refreshOwner()
+      const sig = txResult?.response?.signature
+      if (sig) {
+        try {
+          await connection.confirmTransaction(
+            { signature: sig, blockhash, lastValidBlockHeight },
+            'confirmed'
+          )
+        } catch { /* confirm failure could be ignore */ }
+      }
+
+      if (!msg.startsWith('✅'))
+        setMsg('✅ Success')
+
     } catch (e) {
       setMsg(`❌ ${human(e)}`)
     } finally {
+      try { setQrUrl(await QRCode.toDataURL(mint)) } catch {}
+      await refreshOwner()
       setBusy(false)
     }
   }
 
   return (
     <div className="card">
-      <h2 style={{fontWeight:600}}>Buy/Transfer + QR</h2>
+      <h2 style={{ fontWeight: 600 }}>Buy/Transfer + QR</h2>
 
-      <label>Mint Address<br/>
-        <input className="input" value={mint} onChange={e=>setMint(e.target.value)} />
+      <label>Mint Address<br />
+        <input className="input" value={mint} onChange={e => setMint(e.target.value)} />
       </label>
 
-      <div style={{height:8}} />
+      <div style={{ height: 8 }} />
 
-      <label>Recipient (옵션: 다른 사람 지갑 주소)<br/>
-        <input className="input" placeholder="비워두면 현재 지갑으로 전송"
-               value={recipient} onChange={e=>setRecipient(e.target.value)} />
+      <label>Recipient (Buyer's wallet address)<br />
+        <input
+          className="input"
+          placeholder="If this area empty, ticket will be send it to current wallet"
+          value={recipient}
+          onChange={e => setRecipient(e.target.value)}
+        />
       </label>
 
-      <div className="actions" style={{marginTop:8}}>
-        <button className="tab active" disabled={!wallet.connected || !mint || busy} onClick={onTransfer}>
+      <div className="actions" style={{ marginTop: 8 }}>
+        <button
+          className="tab active"
+          disabled={!wallet.connected || !mint || busy}
+          onClick={onTransfer}
+        >
           {busy ? 'Processing...' : 'Transfer (Buy)'}
         </button>
-        <button className="tab" disabled={!mint || busy} onClick={refreshOwner}>
+        <button
+          className="tab"
+          disabled={!mint || busy}
+          onClick={refreshOwner}
+        >
           Check Current Owner
         </button>
       </div>
 
-      {owner && <p style={{fontSize:12, marginTop:8}}>현재 소유자: {owner}</p>}
+      {owner && <p style={{ fontSize: 12, marginTop: 8 }}>Current Owner: {owner}</p>}
 
       {qrUrl && (
-        <div style={{marginTop:12}}>
+        <div style={{ marginTop: 12 }}>
           <img alt="ticket-qr" src={qrUrl} className="qr" />
-          <p style={{fontSize:12}}>이 QR을 게이트에서 스캔합니다.</p>
+          <p style={{ fontSize: 12 }}>QR code will be scanned at the gate.</p>
         </div>
       )}
 
-      <div style={{marginTop:8,fontSize:14,whiteSpace:'pre-wrap'}}>{msg}</div>
+      <div style={{ marginTop: 8, fontSize: 14, whiteSpace: 'pre-wrap' }}>{msg}</div>
     </div>
   )
 }

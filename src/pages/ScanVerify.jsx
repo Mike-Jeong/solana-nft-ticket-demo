@@ -11,10 +11,9 @@ export default function ScanVerify() {
   const [mint, setMint] = useState('')
   const [owner, setOwner] = useState('')
   const [creator, setCreator] = useState('') // updateAuthority
-  const [status, setStatus] = useState('대기중')
+  const [status, setStatus] = useState('waiting')
   const [busy, setBusy] = useState(false)
 
-  // 현재 보유자(= NFT 가진 지갑 주소) 조회
   async function getNftOwnerByMint(mintStr) {
     try {
       const mintPk = new PublicKey(mintStr)
@@ -29,7 +28,6 @@ export default function ScanVerify() {
     }
   }
 
-  // updateAuthority 추출 (SDK 버전에 따라 필드명이 다를 수 있어 방어적으로 처리)
   function extractCreator(nft) {
     const cand =
       nft?.updateAuthorityAddress?.toBase58?.() ||
@@ -39,7 +37,7 @@ export default function ScanVerify() {
   }
 
   const loadNft = async (mintAddr) => {
-    setStatus('스캔 성공: 소유자 확인 중...')
+    setStatus('Scanning: checking ownership...')
     const curOwner = await getNftOwnerByMint(mintAddr)
     setOwner(curOwner)
 
@@ -48,14 +46,14 @@ export default function ScanVerify() {
       const nft = await mx.nfts().findByMint({ mintAddress: new PublicKey(mintAddr) })
       setCreator(extractCreator(nft))
       if ((nft.uses?.remaining ?? 0) === 0) {
-        setStatus('✅ 이미 사용 완료')
+        setStatus('✅ Already used')
         return
       }
     } catch (e) {
-      console.warn('NFT 메타 조회 실패:', e)
+      console.warn('NFT Meta data no found. e:', e)
     }
 
-    setStatus(curOwner === 'unknown' ? '❌ 소유자 확인 실패' : '스캔 성공: 소유자 확인됨')
+    setStatus(curOwner === 'unknown' ? '❌ can not verify ownership' : 'Success: ownership check')
   }
 
   const onScan = async (result) => {
@@ -68,51 +66,43 @@ export default function ScanVerify() {
       await loadNft(mintValue)
     } catch (e) {
       console.error('onScan error:', e)
-      setStatus('❌ QR 인식 오류 (다시 시도하세요)')
+      setStatus('❌ QR code scan fail (try again)')
     }
   }
 
-  // 게이트: 위임받은 useAuthority(= 현재 연결된 지갑)로 use() 실행
   const markUsed = async () => {
     if (busy || !mint) return
     setBusy(true)
     try {
-      if (!wallet.publicKey) { setStatus('❌ 지갑을 먼저 연결하세요'); return }
+      if (!wallet.publicKey) { setStatus('❌ connect wallet first'); return }
 
       const mx = getMetaplex(connection, wallet)
       const mintPk = new PublicKey(mint)
 
-      // 온체인 uses 상태 확인
       const before = await mx.nfts().findByMint({ mintAddress: mintPk })
       const remaining = before.uses?.remaining ?? null
       const total = before.uses?.total ?? null
-      if (remaining === null) { setStatus('❌ 이 NFT는 uses가 설정되지 않았습니다'); return }
-      if (remaining <= 0)     { setStatus('이미 사용 완료 ✅'); return }
+      if (remaining === null) { setStatus('❌ this nft doen\'t setting "uses"'); return }
+      if (remaining <= 0)     { setStatus('Already used ✅'); return }
 
-      // 현재 보유자 주소를 PublicKey 로 준비 (owner는 주소, Signer 아님)
-      if (!owner || owner === 'unknown') { setStatus('❌ 소유자 확인 실패'); return }
+      if (!owner || owner === 'unknown') { setStatus('❌ can not check ownership'); return }
       const ownerPk = new PublicKey(owner)
 
-      setStatus('🎟️ 온체인 사용 처리 중... 지갑 팝업을 확인하세요')
+      setStatus('🎟️ update usage... check gate\'s wallet pop-up')
       await mx.nfts().use({
         mintAddress: mintPk,
         numberOfUses: 1,
-
-        // 누구의 토큰을 소모할지 지정 (PublicKey)
         owner: ownerPk,
-
-        // 🔥 핵심: 실제 서명자 = "위임받은 게이트 지갑"
-        // getMetaplex(connection, wallet) 로 설정된 identity (현재 연결된 지갑)
         useAuthority: mx.identity(),
       })
 
       const after = await mx.nfts().findByMint({ mintAddress: mintPk })
       const left = after.uses?.remaining ?? 0
-      setStatus(left === 0 ? '✅ 사용 완료 (remaining: 0)' : `남은 횟수: ${left}/${total}`)
+      setStatus(left === 0 ? '✅ Already used (remaining: 0)' : `left count: ${left}/${total}`)
     } catch (e) {
       console.error('markUsed error:', e)
       const msg = e?.cause?.message || e?.message || String(e)
-      setStatus(`❌ 사용 처리 실패: ${msg}\n(민팅 시 게이트 위임이 되었는지 확인하세요)`)
+      setStatus(`❌ usage update fail: ${msg}\n(check this ticket's authority)`)
     } finally {
       setBusy(false)
     }
@@ -123,7 +113,7 @@ export default function ScanVerify() {
 
   return (
     <div className="card">
-      <h2 style={{ fontWeight: 600 }}>Scan & Verify (게이트 자동 처리)</h2>
+      <h2 style={{ fontWeight: 600 }}>Scan & Verify (Gate)</h2>
 
       <div style={{ width: '100%', maxWidth: 420, aspectRatio: '1/1', background: '#0001' }}>
         <Scanner
@@ -137,14 +127,14 @@ export default function ScanVerify() {
       </div>
 
       <div style={{ marginTop: 12, fontSize: 14 }}>
-        <div>상태: <b>{status}</b></div>
+        <div>status: <b>{status}</b></div>
         {mint && <div>Mint: <code>{mint}</code></div>}
-        {owner && <div>현재 소유자: <code>{owner}</code></div>}
-        {creator && <div>제작자(updateAuthority): <code>{creator}</code></div>}
+        {owner && <div>Current owner's wallet address: <code>{owner}</code></div>}
+        {creator && <div>creator(updateAuthority): <code>{creator}</code></div>}
 
         {mint && (
           <a href={`https://explorer.solana.com/address/${mint}?cluster=${cluster}`} target="_blank" rel="noreferrer">
-            Explorer에서 NFT 확인
+            Check NFT at Explorer
           </a>
         )}
 
@@ -154,7 +144,7 @@ export default function ScanVerify() {
             disabled={!canGateUse || busy}
             onClick={markUsed}
           >
-            {busy ? 'Processing…' : '온체인 사용 처리 (게이트)'}
+            {busy ? 'Processing…' : 'update usage'}
           </button>
         </div>
       </div>

@@ -11,7 +11,7 @@ export default defineConfig({
       globals: { Buffer: true, process: true },
     }),
   ],
-  base: '/',
+  base: '/solana-nft-ticket-demo/',
   resolve: {
     alias: {
       'process/browser': path.resolve(__dirname, 'node_modules/process/browser.js'),

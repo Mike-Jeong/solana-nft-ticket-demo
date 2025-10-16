@@ -13,7 +13,7 @@ export default function AdminMint() {
   const [busy, setBusy] = useState(false)
 
   const onMint = async () => {
-    if (!wallet.connected) return setMsg('⚠️ 지갑을 먼저 연결하세요')
+    if (!wallet.connected) return setMsg('⚠️ Connect your wallet first')
 
     try {
       setBusy(true)
@@ -22,7 +22,6 @@ export default function AdminMint() {
       const mx = getMetaplex(connection, wallet)
       const PLACEHOLDER_URI = 'https://arweave.net/6zY4HnZ_placeholder_demo_metadata.json'
 
-      // 1) NFT 민팅 (uses: Single / 1회)
       const { nft } = await mx.nfts().create({
         uri: PLACEHOLDER_URI,
         name: `Ticket - ${seat}`,
@@ -34,23 +33,26 @@ export default function AdminMint() {
 
       const mintPk = nft.address
       setMintAddr(mintPk.toBase58())
-      setMsg('✅ Mint success. 게이트 권한 위임 중...')
+      setMsg('✅ Mint success. Adding authority to Gate...')
 
-      // 2) 민팅 직후: 발행자(현재 소유자)가 게이트 지갑으로 1회 use 권한 위임
+      const currentUser = wallet.publicKey
 
-      const currentUser = wallet.publicKey;
-      console.log(currentUser);
-      // const currentOwner = currentUser;
-      // console.log(currentUser);
+      try {
+        await mx.nfts().approveUseAuthority({
+          mintAddress: mintPk,
+          user: currentUser,
+          numberOfUses: 1,
+        })
+        setMsg('✅ Mint + Gate Authority done!')
+      } catch (e) {
+        const msgText = e?.cause?.message || e?.message || String(e)
+        if (msgText.includes('already been processed')) {
+          setMsg('✅ Success : transaction already done')
+        } else {
+          throw e
+        }
+      }
 
-      await mx.nfts().approveUseAuthority({
-        mintAddress: mintPk,
-        user: currentUser, 
-        //owner: currentOwner, 
-        numberOfUses: 1,
-      })
-
-      setMsg('✅ Mint + 게이트 1회 위임 완료!')
     } catch (e) {
       console.error(e)
       setMsg(`❌ ${e?.cause?.message || e?.message || String(e)}`)
@@ -63,7 +65,7 @@ export default function AdminMint() {
 
   return (
     <div className="card">
-      <h2 style={{fontWeight:600}}>Admin Mint (선위임 포함)</h2>
+      <h2 style={{fontWeight:600}}>Admin Mint</h2>
 
       <label>Seat<br/>
         <input className="input" value={seat} onChange={e=>setSeat(e.target.value)} />
@@ -81,10 +83,10 @@ export default function AdminMint() {
           <code>{mintAddr}</code>
           <div style={{marginTop:6}}>
             <a href={`https://explorer.solana.com/address/${mintAddr}?cluster=${cluster}`} target="_blank" rel="noreferrer">
-              Explorer에서 보기
+              Check NFT at Explorer
             </a>
           </div>
-          <div style={{fontSize:12, marginTop:4}}>👉 이 Mint 주소를 구매/전송 화면에 사용하세요</div>
+          <div style={{fontSize:12, marginTop:4}}>👉 use this Mint address at buy/trasnfer page</div>
         </div>
       )}
 
