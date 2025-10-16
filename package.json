@@ -1,0 +1,39 @@
+{
+  "name": "solana-nft-ticket-demo",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "gh-pages -d dist"
+  },
+  "dependencies": {
+    "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
+    "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
+    "@metaplex-foundation/js": "latest",
+    "@rollup/plugin-inject": "^5.0.5",
+    "@solana/wallet-adapter-base": "latest",
+    "@solana/wallet-adapter-react": "latest",
+    "@solana/wallet-adapter-react-ui": "latest",
+    "@solana/wallet-adapter-wallets": "latest",
+    "@solana/web3.js": "latest",
+    "@yudiel/react-qr-scanner": "latest",
+    "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.1",
+    "path-browserify": "^1.0.1",
+    "process": "^0.11.10",
+    "qrcode": "latest",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "stream-browserify": "^3.0.0",
+    "util": "^0.12.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "latest",
+    "gh-pages": "latest",
+    "vite": "latest",
+    "vite-plugin-node-polyfills": "^0.24.0"
+  }
+}
