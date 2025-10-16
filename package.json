@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "latest",
-    "gh-pages": "latest",
+    "gh-pages": "^6.3.0",
     "vite": "latest",
     "vite-plugin-node-polyfills": "^0.24.0"
   }
